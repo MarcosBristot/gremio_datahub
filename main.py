@@ -1,4 +1,3 @@
-# main.py
 import os
 import requests
 from fastapi import FastAPI, HTTPException
@@ -11,17 +10,14 @@ load_dotenv()
 app = FastAPI(
     title="Grêmio DataHub API",
     description="Uma API que centraliza notícias e estatísticas do Grêmio.",
-    version="1.1.0" # Nova versão com busca inteligente
+    version="1.1.0"
 )
 
 GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 APIFOOTBALL_API_KEY = os.getenv("APIFOOTBALL_API_KEY")
-# =======================================================
-#               CORREÇÃO DO ID DO TIME
-# =======================================================
 GREMIO_TEAM_ID = 130 
 API_FOOTBALL_HOST = "v3.football.api-sports.io"
-CURRENT_SEASON = 2023 # Definindo a temporada atual
+CURRENT_SEASON = 2023
 
 def fetch_from_api(url, headers=None, params=None):
     try:
@@ -37,7 +33,6 @@ def ler_raiz():
 
 @app.get("/noticias")
 def get_noticias():
-    # ... (código da função de notícias, sem alterações)
     if not GNEWS_API_KEY:
         raise HTTPException(status_code=500, detail="A chave da API do GNews não foi configurada.")
     url = "https://gnews.io/api/v4/search"
@@ -45,9 +40,7 @@ def get_noticias():
     data = fetch_from_api(url, params=params)
     return {"noticias": data.get("articles", [])}
 
-# =======================================================
-#               LÓGICA DE BUSCA MELHORADA
-# =======================================================
+
 @app.get("/ultima-partida")
 def get_ultima_partida():
     """
@@ -59,7 +52,6 @@ def get_ultima_partida():
     url = f"https://{API_FOOTBALL_HOST}/fixtures"
     headers = {"x-rapidapi-host": API_FOOTBALL_HOST, "x-rapidapi-key": APIFOOTBALL_API_KEY}
     
-    # Nova lógica: busca todos os jogos da temporada para o time
     params = {"team": GREMIO_TEAM_ID, "season": CURRENT_SEASON}
     
     data = fetch_from_api(url, headers=headers, params=params)
@@ -67,7 +59,6 @@ def get_ultima_partida():
     if not data["response"]:
         return {"mensagem": f"Nenhuma partida encontrada para o Grêmio na temporada de {CURRENT_SEASON}."}
 
-    # Filtra apenas as partidas que já terminaram ('Match Finished')
     partidas_finalizadas = [
         p for p in data["response"] 
         if p['fixture']['status']['short'] == 'FT'
@@ -76,13 +67,10 @@ def get_ultima_partida():
     if not partidas_finalizadas:
         return {"mensagem": "Nenhuma partida finalizada encontrada ainda nesta temporada."}
         
-    # Ordena as partidas pela data para garantir que a mais recente venha por último
     partidas_finalizadas.sort(key=lambda x: x['fixture']['timestamp'])
-    
-    # Pega a última partida da lista ordenada
+
     partida_info = partidas_finalizadas[-1]
     
-    # Formata a resposta (código que já tínhamos)
     data_utc = datetime.fromtimestamp(partida_info['fixture']['timestamp'], tz=timezone.utc)
     data_local = data_utc.astimezone().strftime('%d/%m/%Y às %H:%M')
 
@@ -98,45 +86,7 @@ def get_ultima_partida():
 
 @app.get("/proxima-partida")
 def get_proxima_partida():
-    """
-    Busca a próxima partida agendada, mesmo que esteja longe no futuro.
-    """
-    if not APIFOOTBALL_API_KEY:
-        raise HTTPException(status_code=500, detail="A chave da API-Football não foi configurada.")
-        
-    url = f"https://{API_FOOTBALL_HOST}/fixtures"
-    headers = {"x-rapidapi-host": API_FOOTBALL_HOST, "x-rapidapi-key": APIFOOTBALL_API_KEY}
-    params = {"team": GREMIO_TEAM_ID, "season": CURRENT_SEASON}
-    
-    data = fetch_from_api(url, headers=headers, params=params)
-
-    if not data["response"]:
-        return {"mensagem": f"Nenhuma partida encontrada para o Grêmio na temporada de {CURRENT_SEASON}."}
-
-    # Filtra apenas as partidas que ainda não aconteceram ('Not Started')
-    partidas_agendadas = [
-        p for p in data["response"] 
-        if p['fixture']['status']['short'] == 'NS'
-    ]
-    
-    if not partidas_agendadas:
-        return {"mensagem": "Nenhuma próxima partida encontrada no calendário oficial desta temporada."}
-
-    # Ordena pela data para pegar a mais próxima do futuro
-    partidas_agendadas.sort(key=lambda x: x['fixture']['timestamp'])
-    
-    # Pega a primeira partida da lista ordenada
-    partida_info = partidas_agendadas[0]
-    
-    data_utc = datetime.fromtimestamp(partida_info['fixture']['timestamp'], tz=timezone.utc)
-    data_local = data_utc.astimezone().strftime('%d/%m/%Y às %H:%M')
-
-    return {
-        "campeonato": partida_info['league']['name'], "rodada": partida_info['league']['round'],
-        "data_hora": data_local, "estadio": partida_info['fixture']['venue']['name'],
-        "time_casa": partida_info['teams']['home']['name'], "logo_casa": partida_info['teams']['home']['logo'],
-        "time_visitante": partida_info['teams']['away']['name'], "logo_visitante": partida_info['teams']['away']['logo'],
-    }
+    return {"mensagem": f"Não é possível buscar próximas partidas de uma temporada encerrada ({CURRENT_SEASON})."}
 
 @app.get("/dossie-ultima-partida")
 def get_dossie_ultima_partida():
@@ -159,7 +109,6 @@ def get_dossie_ultima_partida():
     partidas_finalizadas.sort(key=lambda x: x['fixture']['timestamp'])
     partida_info = partidas_finalizadas[-1]
     
-    # ETAPA 2: Extrair informações e criar a janela de tempo
     adversario = partida_info['teams']['home']['name'] if "Grêmio" in partida_info['teams']['away']['name'] else partida_info['teams']['away']['name']
     
     match_timestamp = partida_info['fixture']['timestamp']
@@ -181,14 +130,14 @@ def get_dossie_ultima_partida():
         "lang": "pt",
         "country": "br",
         "max": 5,
-        "from": start_date_iso, # <-- Filtro de data inicial
-        "to": end_date_iso,     # <-- Filtro de data final
+        "from": start_date_iso,
+        "to": end_date_iso,
         "apikey": GNEWS_API_KEY
     }
     
     dados_noticias = fetch_from_api(url_gnews, params=params_gnews)
     
-    dados_partida_formatado = get_ultima_partida() # Chamamos a função para formatar o JSON
+    dados_partida_formatado = get_ultima_partida()
     return {
         "partida": dados_partida_formatado,
         "noticias_relacionadas": dados_noticias.get("articles", [])
